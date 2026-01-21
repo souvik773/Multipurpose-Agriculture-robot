@@ -1,56 +1,53 @@
-/******************* WiFi Agricultural Robot - NodeMCU + 4x BTS7960 + Blynk IoT ********************/
+/******** ESP8266 AGRICULTURE ROBOT – FULL VERSION ********/
 
-//#define BLYNK_TEMPLATE_ID "YOUR_TEMPLATE_ID"       // Replace with your Blynk Template ID
-//#define BLYNK_DEVICE_NAME "AgriRobot"              // Replace with your Blynk Template Name
-//#define BLYNK_AUTH_TOKEN "YOUR_BLYNK_AUTH_TOKEN"   // Replace with your Device Auth Token
-
-#define BLYNK_TEMPLATE_ID "TMPLxxxxxx"
-#define BLYNK_TEMPLATE_NAME "WiFi RC Car"
-#define BLYNK_AUTH_TOKEN "your_auth_token_here"
-
+#define BLYNK_TEMPLATE_ID   "YOUR_TEMPLATE_ID"
+#define BLYNK_TEMPLATE_NAME "YOUR_TEMPLATE_NAME"
+#define BLYNK_AUTH_TOKEN    "YOUR_BLYNK_AUTH_TOKEN"
 
 #include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>
+#include <WiFiManager.h>
 #include <Servo.h>
 
-// ----- WiFi Credentials -----
-char ssid[] = "YOUR_WIFI_SSID";   // WiFi Name
-char pass[] = "YOUR_WIFI_PASS";   // WiFi Password
+// ---------------- SAFE PIN MAPPING ----------------
+// Drive Motors (BTS7960 – Left & Right)
+#define L_RPWM   D1
+#define L_LPWM   D2
+#define R_RPWM   D5
+#define R_LPWM   D6
 
-// ----- Drive Motor Pins -----
-const int L_RPWM = D1;
-const int L_LPWM = D2;
-const int R_RPWM = D3;
-const int R_LPWM = D4;
+// Weed Cutter (BTS7960)
+#define CUT_RPWM D7
+#define CUT_LPWM D0
 
-// ----- Weed Cutter Motor (BTS) -----
-const int CUT_RPWM = D5;
-const int CUT_LPWM = D6;
+// Water Pump (BTS7960)
+#define PUMP_RPWM D3
+#define PUMP_LPWM D4
 
-// ----- Water Pump Motor (BTS) -----
-const int PUMP_RPWM = D7;
-const int PUMP_LPWM = D8;
+// Seed Servo
+#define SERVO_PIN D9   // GPIO3
 
-// ----- Servo for Seed Sowing -----
+// ---------------- Servo ----------------
 Servo seedServo;
-const int servoPin = D0;
-int servoCenter = 90;   // Center position
-int servoDown = 60;     // Active position for sowing
+int servoUp = 90;
+int servoDown = 60;
 
-// ----- Blynk Virtual Pins -----
-#define V_FORWARD     V1
-#define V_BACKWARD    V2
-#define V_LEFT        V3
-#define V_RIGHT       V4
-#define V_WEEDCUT     V5
-#define V_PUMP        V6
-#define V_SEEDSERVO   V7
-#define V_FL          V8
-#define V_FR          V9
-#define V_BL          V10
-#define V_BR          V11
+// ---------------- Blynk Virtual Pins ----------------
+#define V_FORWARD   V1
+#define V_BACKWARD  V2
+#define V_LEFT      V3
+#define V_RIGHT     V4
 
-// ----- Helper Functions -----
+#define V_WEEDCUT   V5
+#define V_PUMP      V6
+#define V_SERVO     V7
+
+#define V_FL        V8
+#define V_FR        V9
+#define V_BL        V10
+#define V_BR        V11
+
+// ---------------- MOTOR FUNCTIONS ----------------
 void stopMotors() {
   digitalWrite(L_RPWM, LOW);
   digitalWrite(L_LPWM, LOW);
@@ -58,69 +55,59 @@ void stopMotors() {
   digitalWrite(R_LPWM, LOW);
 }
 
+// Straight movements
 void forward() {
+  stopMotors();
   digitalWrite(L_RPWM, HIGH);
-  digitalWrite(L_LPWM, LOW);
   digitalWrite(R_RPWM, HIGH);
-  digitalWrite(R_LPWM, LOW);
 }
 
 void backward() {
-  digitalWrite(L_RPWM, LOW);
+  stopMotors();
   digitalWrite(L_LPWM, HIGH);
-  digitalWrite(R_RPWM, LOW);
   digitalWrite(R_LPWM, HIGH);
 }
 
 void left() {
-  digitalWrite(L_RPWM, LOW);
+  stopMotors();
   digitalWrite(L_LPWM, HIGH);
   digitalWrite(R_RPWM, HIGH);
-  digitalWrite(R_LPWM, LOW);
 }
 
 void right() {
+  stopMotors();
   digitalWrite(L_RPWM, HIGH);
-  digitalWrite(L_LPWM, LOW);
-  digitalWrite(R_RPWM, LOW);
   digitalWrite(R_LPWM, HIGH);
 }
 
+// Diagonal movements
 void forwardLeft() {
-  digitalWrite(L_RPWM, LOW);
-  digitalWrite(L_LPWM, LOW);
+  stopMotors();
   digitalWrite(R_RPWM, HIGH);
-  digitalWrite(R_LPWM, LOW);
 }
 
 void forwardRight() {
+  stopMotors();
   digitalWrite(L_RPWM, HIGH);
-  digitalWrite(L_LPWM, LOW);
-  digitalWrite(R_RPWM, LOW);
-  digitalWrite(R_LPWM, LOW);
 }
 
 void backwardLeft() {
-  digitalWrite(L_RPWM, LOW);
-  digitalWrite(L_LPWM, HIGH);
-  digitalWrite(R_RPWM, LOW);
-  digitalWrite(R_LPWM, LOW);
-}
-
-void backwardRight() {
-  digitalWrite(L_RPWM, LOW);
-  digitalWrite(L_LPWM, LOW);
-  digitalWrite(R_RPWM, LOW);
+  stopMotors();
   digitalWrite(R_LPWM, HIGH);
 }
 
-// ----- Weed Cutter & Pump Control -----
-void weedCutterOn() {
+void backwardRight() {
+  stopMotors();
+  digitalWrite(L_LPWM, HIGH);
+}
+
+// ---------------- CUTTER & PUMP ----------------
+void cutterOn() {
   digitalWrite(CUT_RPWM, HIGH);
   digitalWrite(CUT_LPWM, LOW);
 }
 
-void weedCutterOff() {
+void cutterOff() {
   digitalWrite(CUT_RPWM, LOW);
   digitalWrite(CUT_LPWM, LOW);
 }
@@ -135,55 +122,61 @@ void pumpOff() {
   digitalWrite(PUMP_LPWM, LOW);
 }
 
-// ----- Seed Servo -----
-void servoDownAction() {
-  seedServo.write(servoDown);
+// ---------------- BLYNK CONTROLS ----------------
+BLYNK_WRITE(V_FORWARD)  { param.asInt() ? forward()        : stopMotors(); }
+BLYNK_WRITE(V_BACKWARD) { param.asInt() ? backward()       : stopMotors(); }
+BLYNK_WRITE(V_LEFT)     { param.asInt() ? left()           : stopMotors(); }
+BLYNK_WRITE(V_RIGHT)    { param.asInt() ? right()          : stopMotors(); }
+
+BLYNK_WRITE(V_FL)       { param.asInt() ? forwardLeft()    : stopMotors(); }
+BLYNK_WRITE(V_FR)       { param.asInt() ? forwardRight()   : stopMotors(); }
+BLYNK_WRITE(V_BL)       { param.asInt() ? backwardLeft()   : stopMotors(); }
+BLYNK_WRITE(V_BR)       { param.asInt() ? backwardRight()  : stopMotors(); }
+
+BLYNK_WRITE(V_WEEDCUT)  { param.asInt() ? cutterOn()       : cutterOff(); }
+BLYNK_WRITE(V_PUMP)     { param.asInt() ? pumpOn()         : pumpOff(); }
+
+BLYNK_WRITE(V_SERVO) {
+  param.asInt() ? seedServo.write(servoDown) : seedServo.write(servoUp);
 }
 
-void servoUpAction() {
-  seedServo.write(servoCenter);
-}
-
-// ----- Blynk Control -----
-BLYNK_WRITE(V_FORWARD)   { if (param.asInt()) forward(); else stopMotors(); }
-BLYNK_WRITE(V_BACKWARD)  { if (param.asInt()) backward(); else stopMotors(); }
-BLYNK_WRITE(V_LEFT)      { if (param.asInt()) left(); else stopMotors(); }
-BLYNK_WRITE(V_RIGHT)     { if (param.asInt()) right(); else stopMotors(); }
-BLYNK_WRITE(V_FL)        { if (param.asInt()) forwardLeft(); else stopMotors(); }
-BLYNK_WRITE(V_FR)        { if (param.asInt()) forwardRight(); else stopMotors(); }
-BLYNK_WRITE(V_BL)        { if (param.asInt()) backwardLeft(); else stopMotors(); }
-BLYNK_WRITE(V_BR)        { if (param.asInt()) backwardRight(); else stopMotors(); }
-
-BLYNK_WRITE(V_WEEDCUT)   { if (param.asInt()) weedCutterOn(); else weedCutterOff(); }
-BLYNK_WRITE(V_PUMP)      { if (param.asInt()) pumpOn(); else pumpOff(); }
-
-BLYNK_WRITE(V_SEEDSERVO) { if (param.asInt()) servoDownAction(); else servoUpAction(); }
-
-// ----- Setup -----
+// ---------------- SETUP ----------------
 void setup() {
   Serial.begin(9600);
-  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 
   pinMode(L_RPWM, OUTPUT);
   pinMode(L_LPWM, OUTPUT);
   pinMode(R_RPWM, OUTPUT);
   pinMode(R_LPWM, OUTPUT);
+
   pinMode(CUT_RPWM, OUTPUT);
   pinMode(CUT_LPWM, OUTPUT);
   pinMode(PUMP_RPWM, OUTPUT);
   pinMode(PUMP_LPWM, OUTPUT);
 
-  seedServo.attach(servoPin);
-  seedServo.write(servoCenter);
-
   stopMotors();
-  weedCutterOff();
+  cutterOff();
   pumpOff();
 
-  Serial.println("AgriRobot Ready - Connected to Blynk!");
+  seedServo.attach(SERVO_PIN);
+  seedServo.write(servoUp);
+
+  // -------- WiFiManager --------
+  WiFi.mode(WIFI_STA);
+  WiFiManager wm;
+  wm.setConfigPortalTimeout(180);
+
+  if (!wm.autoConnect("ESP8266-Setup")) {
+    ESP.restart();
+  }
+
+  // -------- Blynk --------
+  Blynk.config(BLYNK_AUTH_TOKEN);
+  Blynk.connect();
 }
 
-// ----- Loop -----
+// ---------------- LOOP ----------------
 void loop() {
   Blynk.run();
 }
+
