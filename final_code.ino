@@ -20,7 +20,7 @@
 
 // ---------- WEED CUTTER (BTS7960) ----------
 #define CUT_RPWM D7   // GPIO13
-#define CUT_LPWM D8   // GPIO15   (CHANGED from D0 ❌)
+#define CUT_LPWM D8   // GPIO15   
 
 // ---------- WATER PUMP (BTS7960) ----------
 #define PUMP_RPWM D3  // GPIO0
