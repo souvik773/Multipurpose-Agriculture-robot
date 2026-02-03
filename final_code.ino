@@ -9,138 +9,108 @@
 #include <WiFiManager.h>
 #include <Servo.h>
 
-// ---------------- SAFE PIN MAPPING ----------------
-// Drive Motors (BTS7960 – Left & Right)
-#define L_RPWM   D1
-#define L_LPWM   D2
-#define R_RPWM   D5
-#define R_LPWM   D6
+// ---------- PWM SPEED ----------
+#define MOTOR_PWM 700   // 0–1023 (safe start)
 
-// Weed Cutter (BTS7960)
-#define CUT_RPWM D7
-#define CUT_LPWM D0
+// ---------- DRIVE MOTORS (BTS7960) ----------
+#define L_RPWM   D1   // GPIO5
+#define L_LPWM   D2   // GPIO4
+#define R_RPWM   D5   // GPIO14
+#define R_LPWM   D6   // GPIO12
 
-// Water Pump (BTS7960)
-#define PUMP_RPWM D3
-#define PUMP_LPWM D4
+// ---------- WEED CUTTER (BTS7960) ----------
+#define CUT_RPWM D7   // GPIO13
+#define CUT_LPWM D8   // GPIO15   (CHANGED from D0 ❌)
 
-// Seed Servo
-#define SERVO_PIN D9   // GPIO3
+// ---------- WATER PUMP (BTS7960) ----------
+#define PUMP_RPWM D3  // GPIO0
+#define PUMP_LPWM D4  // GPIO2
 
-// ---------------- Servo ----------------
+// ---------- SERVO ----------
+#define SERVO_PIN D9  // GPIO3 (RX)
+
+// ---------- SERVO ----------
 Servo seedServo;
 int servoUp = 90;
 int servoDown = 60;
 
-// ---------------- Blynk Virtual Pins ----------------
+// ---------- MOTOR CONTROL ----------
+void stopDrive() {
+  analogWrite(L_RPWM, 0);
+  analogWrite(L_LPWM, 0);
+  analogWrite(R_RPWM, 0);
+  analogWrite(R_LPWM, 0);
+}
+
+void forward() {
+  stopDrive();
+  analogWrite(L_RPWM, MOTOR_PWM);
+  analogWrite(R_RPWM, MOTOR_PWM);
+}
+
+void backward() {
+  stopDrive();
+  analogWrite(L_LPWM, MOTOR_PWM);
+  analogWrite(R_LPWM, MOTOR_PWM);
+}
+
+void left() {
+  stopDrive();
+  analogWrite(L_LPWM, MOTOR_PWM);
+  analogWrite(R_RPWM, MOTOR_PWM);
+}
+
+void right() {
+  stopDrive();
+  analogWrite(L_RPWM, MOTOR_PWM);
+  analogWrite(R_LPWM, MOTOR_PWM);
+}
+
+// ---------- CUTTER ----------
+void cutterOn() {
+  analogWrite(CUT_RPWM, MOTOR_PWM);
+  analogWrite(CUT_LPWM, 0);
+}
+
+void cutterOff() {
+  analogWrite(CUT_RPWM, 0);
+  analogWrite(CUT_LPWM, 0);
+}
+
+// ---------- PUMP ----------
+void pumpOn() {
+  analogWrite(PUMP_RPWM, MOTOR_PWM);
+  analogWrite(PUMP_LPWM, 0);
+}
+
+void pumpOff() {
+  analogWrite(PUMP_RPWM, 0);
+  analogWrite(PUMP_LPWM, 0);
+}
+
+// ---------- BLYNK ----------
 #define V_FORWARD   V1
 #define V_BACKWARD  V2
 #define V_LEFT      V3
 #define V_RIGHT     V4
-
 #define V_WEEDCUT   V5
 #define V_PUMP      V6
 #define V_SERVO     V7
 
-#define V_FL        V8
-#define V_FR        V9
-#define V_BL        V10
-#define V_BR        V11
+BLYNK_WRITE(V_FORWARD)  { param.asInt() ? forward()  : stopDrive(); }
+BLYNK_WRITE(V_BACKWARD) { param.asInt() ? backward() : stopDrive(); }
+BLYNK_WRITE(V_LEFT)     { param.asInt() ? left()     : stopDrive(); }
+BLYNK_WRITE(V_RIGHT)    { param.asInt() ? right()    : stopDrive(); }
 
-// ---------------- MOTOR FUNCTIONS ----------------
-void stopMotors() {
-  digitalWrite(L_RPWM, LOW);
-  digitalWrite(L_LPWM, LOW);
-  digitalWrite(R_RPWM, LOW);
-  digitalWrite(R_LPWM, LOW);
-}
-
-// Straight movements
-void forward() {
-  stopMotors();
-  digitalWrite(L_RPWM, HIGH);
-  digitalWrite(R_RPWM, HIGH);
-}
-
-void backward() {
-  stopMotors();
-  digitalWrite(L_LPWM, HIGH);
-  digitalWrite(R_LPWM, HIGH);
-}
-
-void left() {
-  stopMotors();
-  digitalWrite(L_LPWM, HIGH);
-  digitalWrite(R_RPWM, HIGH);
-}
-
-void right() {
-  stopMotors();
-  digitalWrite(L_RPWM, HIGH);
-  digitalWrite(R_LPWM, HIGH);
-}
-
-// Diagonal movements
-void forwardLeft() {
-  stopMotors();
-  digitalWrite(R_RPWM, HIGH);
-}
-
-void forwardRight() {
-  stopMotors();
-  digitalWrite(L_RPWM, HIGH);
-}
-
-void backwardLeft() {
-  stopMotors();
-  digitalWrite(R_LPWM, HIGH);
-}
-
-void backwardRight() {
-  stopMotors();
-  digitalWrite(L_LPWM, HIGH);
-}
-
-// ---------------- CUTTER & PUMP ----------------
-void cutterOn() {
-  digitalWrite(CUT_RPWM, HIGH);
-  digitalWrite(CUT_LPWM, LOW);
-}
-
-void cutterOff() {
-  digitalWrite(CUT_RPWM, LOW);
-  digitalWrite(CUT_LPWM, LOW);
-}
-
-void pumpOn() {
-  digitalWrite(PUMP_RPWM, HIGH);
-  digitalWrite(PUMP_LPWM, LOW);
-}
-
-void pumpOff() {
-  digitalWrite(PUMP_RPWM, LOW);
-  digitalWrite(PUMP_LPWM, LOW);
-}
-
-// ---------------- BLYNK CONTROLS ----------------
-BLYNK_WRITE(V_FORWARD)  { param.asInt() ? forward()        : stopMotors(); }
-BLYNK_WRITE(V_BACKWARD) { param.asInt() ? backward()       : stopMotors(); }
-BLYNK_WRITE(V_LEFT)     { param.asInt() ? left()           : stopMotors(); }
-BLYNK_WRITE(V_RIGHT)    { param.asInt() ? right()          : stopMotors(); }
-
-BLYNK_WRITE(V_FL)       { param.asInt() ? forwardLeft()    : stopMotors(); }
-BLYNK_WRITE(V_FR)       { param.asInt() ? forwardRight()   : stopMotors(); }
-BLYNK_WRITE(V_BL)       { param.asInt() ? backwardLeft()   : stopMotors(); }
-BLYNK_WRITE(V_BR)       { param.asInt() ? backwardRight()  : stopMotors(); }
-
-BLYNK_WRITE(V_WEEDCUT)  { param.asInt() ? cutterOn()       : cutterOff(); }
-BLYNK_WRITE(V_PUMP)     { param.asInt() ? pumpOn()         : pumpOff(); }
+BLYNK_WRITE(V_WEEDCUT)  { param.asInt() ? cutterOn() : cutterOff(); }
+BLYNK_WRITE(V_PUMP)     { param.asInt() ? pumpOn()   : pumpOff(); }
 
 BLYNK_WRITE(V_SERVO) {
-  param.asInt() ? seedServo.write(servoDown) : seedServo.write(servoUp);
+  param.asInt() ? seedServo.write(servoDown)
+                : seedServo.write(servoUp);
 }
 
-// ---------------- SETUP ----------------
+// ---------- SETUP ----------
 void setup() {
   Serial.begin(9600);
 
@@ -148,35 +118,27 @@ void setup() {
   pinMode(L_LPWM, OUTPUT);
   pinMode(R_RPWM, OUTPUT);
   pinMode(R_LPWM, OUTPUT);
-
   pinMode(CUT_RPWM, OUTPUT);
   pinMode(CUT_LPWM, OUTPUT);
   pinMode(PUMP_RPWM, OUTPUT);
   pinMode(PUMP_LPWM, OUTPUT);
 
-  stopMotors();
+  stopDrive();
   cutterOff();
   pumpOff();
 
   seedServo.attach(SERVO_PIN);
   seedServo.write(servoUp);
 
-  // -------- WiFiManager --------
   WiFi.mode(WIFI_STA);
   WiFiManager wm;
   wm.setConfigPortalTimeout(180);
+  if (!wm.autoConnect("ESP8266-Setup")) ESP.restart();
 
-  if (!wm.autoConnect("ESP8266-Setup")) {
-    ESP.restart();
-  }
-
-  // -------- Blynk --------
   Blynk.config(BLYNK_AUTH_TOKEN);
   Blynk.connect();
 }
 
-// ---------------- LOOP ----------------
 void loop() {
   Blynk.run();
 }
-
